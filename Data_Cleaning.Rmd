@@ -1,0 +1,212 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tidytext)
+library(lubridate)
+library(stringr)
+library(purrr)
+```
+
+##Cleaning 1 CSV file 
+
+Getting into R
+```{r}
+tweets1 <- read.csv("Raw Data/IRAhandle_tweets_1.csv")
+tbl_tweets1 <- as_tibble(tweets1)
+```
+
+Tokenizing
+```{r}
+stop_words <- bind_rows(stop_words, c(word = "amp", lexicon = "Custom"))
+
+tidy_tweets1 <- tbl_tweets1 %>% 
+  mutate(content = as.character(content)) %>% 
+  filter(str_detect(content, "&amp;")) %>%
+  unnest_tokens(word, content, token = "tweets") %>% 
+  anti_join(stop_words) %>%
+  filter(str_detect(word, "^#[^a-z]+")|!str_detect(word, "[^a-z#@]"), 
+         #if want to analyze emoji's later, change above line
+         #!str_detect(word, "[:xdigit:]"),
+         !word %in% str_remove_all(stop_words$word, "'")) %>%
+  select(-tco1_step1, -tco2_step1, -tco3_step1, -article_url, -post_type) %>%
+  mutate(external_author_id = as.character(external_author_id), 
+         alt_external_id = as.character(alt_external_id),
+         author = as.character(author),
+         region = as.character(region),
+         language = as.character(language),
+         account_type = as.character(account_type),
+         account_category = as.character(account_category),
+         publish_date = mdy_hm(publish_date),
+         harvested_date = mdy_hm(harvested_date))
+
+#later create function that does all this and map to each csv file
+```
+Initially saw "dont" and "amp" in top counts. Removed stop words with contractions because "dont" was in top words and then "&amp;" for & and [:xdigit:] for hex digits
+
+```{r}
+tidy_tweets1 %>% count(word, sort = T)
+```
+"msm" is most likely "main stream media"
+
+##Cleaning all 13 CSV files
+```{r}
+stop_words <- bind_rows(stop_words, c(word = "amp", lexicon = "Custom"))
+
+tidying_tweets <- function(file){
+  tweets <- read.csv(file)
+  tbl_tweets <- as_tibble(tweets)
+
+  tidy_tweets <- tbl_tweets %>% 
+  mutate(content = as.character(content)) %>% 
+  filter(str_detect(content, "&amp;")) %>%
+  unnest_tokens(word, content, token = "tweets") %>% 
+  anti_join(stop_words) %>%
+  filter(str_detect(word, "^#[^a-z]+")|!str_detect(word, "[^a-z#@]"), 
+         !word %in% str_remove_all(stop_words$word, "'")) %>%
+  select(-tco1_step1, -tco2_step1, -tco3_step1, -article_url, -post_type) %>%
+  mutate(external_author_id = as.character(external_author_id), 
+         alt_external_id = as.character(alt_external_id),
+         author = as.character(author),
+         region = as.character(region),
+         language = as.character(language),
+         account_type = as.character(account_type),
+         account_category = as.character(account_category),
+         publish_date = mdy_hm(publish_date),
+         harvested_date = mdy_hm(harvested_date))
+  
+  return(tidy_tweets)
+}
+
+```
+
+FINAL
+```{r}
+files <- paste0("Raw Data/IRAhandle_tweets_", 1:13,".csv")
+
+raw_list <- map(files, tidying_tweets)
+tweets <- bind_rows(raw_list)
+
+write.csv(tweets, "tidy_tweets.csv")
+```
+
+
+
+##Exploring Possible Emojis
+
+```{r}
+tidy_tweets2.1 %>% select(word) %>% filter(str_detect(word, "[^a-z 0-9 # @ + = $ :punct:]")) %>% filter(!str_detect(word,"https:")) %>% count() 
+```
+
+```{r}
+possible_emojis <- tidy_tweets2.1 %>% select(word) %>% filter(str_detect(word, "[^a-z 0-9 # @ + = $ :punct:]")) %>% filter(!str_detect(word,"https:"))
+```
+
+
+```{r}
+possible_emojis <- possible_emojis %>% mutate(emoji = iconv(word, from = "UTF-8", to = "ascii", sub = "byte"))
+
+possible_emojis <- data.frame(possible_emojis)
+
+library(readr)
+emoji_dictionary <- read_csv("https://raw.githubusercontent.com/lyons7/emojidictionary/master/emoji_dictionary.csv")
+
+library(DataCombine)
+emoji_descs <- FindReplace(data = possible_emojis, Var = "emoji", 
+                      replaceData = hash_emojis,
+                      from = "x", to = "y", 
+                      exact = FALSE)
+
+library(lexicon)
+```
+
+
+
+
+
+
+```{r}
+test <- read.csv("Raw Data/IRAhandle_tweets_1.csv", encoding = "UTF-8")
+tbl_test <- as_tibble(test)
+
+tidy_test <- tbl_test %>% 
+  mutate(content = as.character(content)) %>% 
+  filter(str_detect(content, "&amp;")) %>%
+  unnest_tokens(word, content, token = "tweets") %>% 
+  anti_join(stop_words) %>%
+  filter(#str_detect(word, "^#[^a-z]+")|!str_detect(word, "[^a-z#@]"), 
+    #if want to analyze emoji's later, change above line
+    #!str_detect(word, "[:xdigit:]"),
+    !word %in% str_remove_all(stop_words$word, "'")) %>% 
+  select(-tco1_step1, -tco2_step1, -tco3_step1, -article_url, -post_type) %>%
+  mutate(external_author_id = as.character(external_author_id), 
+         author = as.character(author),
+         region = as.character(region),
+         language = as.character(language),
+         account_type = as.character(account_type),
+         account_category = as.character(account_category),
+         publish_date = mdy_hm(publish_date),
+         harvested_date = mdy_hm(harvested_date))
+
+test_possible_emojis <-  tidy_test %>% select(word) %>% filter(str_detect(word, "[^a-z 0-9 # @ + = $ :punct:]")) %>% filter(!str_detect(word,"https:"))
+```
+
+
+```{r}
+test_possible_emojis <- test_possible_emojis %>% mutate(emoji = iconv(word, from = "UTF-8", to = "ascii", sub = "byte"), emoji_replace = emoji)
+
+test_possible_emojis <- data.frame(test_possible_emojis)
+
+library(readr)
+emoji_dictionary <- read_csv("https://raw.githubusercontent.com/lyons7/emojidictionary/master/emoji_dictionary.csv")
+
+library(DataCombine)
+emoji_descs_test <- FindReplace(data = test_possible_emojis, Var = "emoji_replace", 
+                      replaceData = emoji_dictionary,
+                      from = "R_Encoding", to = "Name", 
+                      exact = FALSE)
+
+emoji_descs_test <- as_tibble(emoji_descs_test)
+emoji_descs_test <- emoji_descs_test %>% filter(emoji != emoji_replace) %>%
+                    mutate(emoji_replace = 
+                             str_remove_all(emoji_replace, "<[:alnum:][:alnum:]>")) %>%
+                    select(-emoji)
+
+library(lexicon)
+```
+Worked kinda
+
+
+```{r}
+emoji_tester_EMOJI <- emoji_descs_test %>% 
+                mutate(emoji_replace = str_remove_all(emoji_replace, "http[a-z 0-9]+"),
+                       emoji = str_extract_all(emoji_replace, "[:upper:]+"),
+                       word_w_emoji = str_extract_all(emoji_replace, "[:lower:]+")) %>%
+                unnest(emoji, .preserve = word_w_emoji) %>% select(-word_w_emoji)
+
+
+emoji_tester_WORD <- emoji_descs_test %>% 
+                mutate(emoji_replace = str_remove_all(emoji_replace, "http[a-z 0-9]+"),
+                       emoji = str_extract_all(emoji_replace, "[:upper:]+"),
+                       word_w_emoji = str_extract_all(emoji_replace, "[:lower:]+")) %>%
+                unnest(word_w_emoji) 
+
+emoji_tester <- emoji_descs_test %>% 
+                mutate(emoji_replace = str_remove_all(emoji_replace, "http[a-z 0-9]+"),
+                       emoji = str_extract_all(emoji_replace, "[:upper:]+"),
+                       word_w_emoji = str_extract_all(emoji_replace, "[:lower:]+")) %>%
+                unnest(emoji, .preserve = word_w_emoji) %>% unnest(word_w_emoji) %>% 
+                select(emoji, word_w_emoji, word)
+```
+
+
+```{r}
+emoji_test_final <- tidy_test %>% 
+                    left_join(emoji_tester_EMOJI %>% select(word, emoji)) %>%
+                    filter(!is.na(emoji))
+```
+

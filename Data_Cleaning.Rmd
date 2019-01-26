@@ -10,6 +10,7 @@ library(tidytext)
 library(lubridate)
 library(stringr)
 library(purrr)
+library(DataCombine)
 ```
 
 ##Cleaning 1 CSV file 
@@ -458,6 +459,8 @@ emojis <- bind_rows(raw_emojis)
 
 write.csv(emojis, "tidy_emojis.csv")
 write.csv(tweets, "tidy_tweets2.csv")
+
+
 ```
 
 
@@ -465,3 +468,24 @@ write.csv(tweets, "tidy_tweets2.csv")
 ```{r}
 function_text <- tidying_tweets2("Raw Data/IRAhandle_tweets_1.csv")
 ```
+
+
+##CSV 10
+```{r}
+library(tokenizers)
+library(devtools)
+#devtools::install_github("ropensci/tokenizers")
+ 
+file <- "C:/Users/nbrowen/Desktop/SeniorProject-master/SeniorProject-master/Raw Data/IRAhandle_tweets_10.csv"
+data <- read.csv(file, encoding = "UTF-8")
+tbl_data <- as_tibble(data)
+
+  
+stop_words <- bind_rows(stop_words, c(word = "amp", lexicon = "Custom"),c(word = "rt",                                    lexicon = "Custom"))
+tidy_data <- tbl_data %>%
+  mutate(content = as.character(content)) %>% 
+   mutate(word = tokenize_tweets(content, stopwords = stop_words$word, strip_url = T)) %>% unnest(word)
+
+## do everything else in the function
+```
+

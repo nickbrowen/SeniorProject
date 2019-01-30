@@ -1,0 +1,63 @@
+---
+title: "Exploratory Analysis"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(scales)
+```
+
+
+```{r}
+tweets <- read.csv("tidy_tweets2.csv")
+tweets <- as_tibble(tweets)
+
+tester_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
+```
+
+
+```{r message=FALSE, paged.print=FALSE}
+tweets %>% count(word, sort = T) %>% top_n(20) %>% 
+           mutate(word = reorder(word, n)) %>%
+           ggplot(aes(word,n)) + geom_col() + coord_flip() +
+           ggtitle("Top Words in All Tweets")
+```
+
+```{r}
+tweets %>% group_by(account_category) %>% 
+  summarise(n = n()) %>% arrange(desc(n)) %>% 
+  mutate(account_category = reorder(account_category, n)) %>%
+  ggplot(aes(account_category, n)) + geom_col() + coord_flip() + ggtitle("Number of Words by Account Category") +
+  scale_y_continuous(labels = comma)
+```
+
+
+```{r paged.print=TRUE}
+ tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+   group_by(account_category) %>% count(word) %>% top_n(10) %>%
+   arrange(desc(n), .by_group = T) %>% print(n=40)
+```
+
+
+```{r message=FALSE, paged.print=FALSE}
+tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+    group_by(account_category) %>% count(word) %>% 
+    arrange(desc(n), .by_group = T)  %>%
+    top_n(10) %>%
+    ungroup() %>%
+    mutate(word = reorder(word, n)) %>%
+    ggplot(aes(word,n, fill = account_category)) + 
+    geom_col() + coord_flip() +
+    facet_wrap(~account_category, ncol = 2, scales = "free") +
+    ggtitle("Top Words in Each Account Category") + theme(legend.position = "none")
+```
+
+```{r}
+tweets %>% group_by(account_category, tweet_id) %>% 
+  count(account_category, sort =T)  %>% group_by(account_category) %>%
+  summarise(n = n()) %>% mutate(account_category = reorder(account_category, n)) %>%
+  ggplot(aes(account_category, n)) + geom_col() + coord_flip() + ggtitle("Number of Tweets by Account Category") + 
+  scale_y_continuous(labels = comma)
+```
+

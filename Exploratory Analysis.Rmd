@@ -6,14 +6,33 @@ output: html_notebook
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 library(tidyverse)
 library(scales)
+library(tidytext)
+library(lubridate)
+library(stringr)
+library(purrr)
+library(curl)
 ```
 
 
 ```{r}
 tweets <- read.csv("tidy_tweets2.csv")
 tweets <- as_tibble(tweets)
+tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date))
 
-tester_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
+tweets_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
+```
+
+
+```{r}
+write.csv(tweets_subset, "tweets_subset.csv")
 ```
 
 
@@ -23,6 +42,14 @@ tweets %>% count(word, sort = T) %>% top_n(20) %>%
            ggplot(aes(word,n)) + geom_col() + coord_flip() +
            ggtitle("Top Words in All Tweets")
 ```
+
+
+```{r}
+tweets %>% filter(word == "workout") %>% group_by(account_category) %>% count(word, sort = T)
+```
+
+Initially, it was odd to see the word "workout" as the second most used word. Then upon investigation, this word was used almost exclusively in the Commercial account category. This makes me question if I should filter out tweets from the category, because they might not be useful to my research questions.
+
 
 ```{r}
 tweets %>% group_by(account_category) %>% 
@@ -34,25 +61,41 @@ tweets %>% group_by(account_category) %>%
 
 
 ```{r paged.print=TRUE}
- tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+ tweets %>% #filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
    group_by(account_category) %>% count(word) %>% top_n(10) %>%
    arrange(desc(n), .by_group = T) %>% print(n=40)
 ```
 
 
-```{r message=FALSE, paged.print=FALSE}
-tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
-    group_by(account_category) %>% count(word) %>% 
-    arrange(desc(n), .by_group = T)  %>%
-    top_n(10) %>%
-    ungroup() %>%
-    mutate(word = reorder(word, n)) %>%
-    ggplot(aes(word,n, fill = account_category)) + 
-    geom_col() + coord_flip() +
-    facet_wrap(~account_category, ncol = 2, scales = "free") +
-    ggtitle("Top Words in Each Account Category") + theme(legend.position = "none")
+```{r}
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
 ```
 
+```{r}
+tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+     group_by(account_category) %>% count(word) %>% 
+     top_n(10) %>%
+     ungroup() %>%
+     ggplot(aes(reorder_within(word, n, account_category),n, fill = account_category)) + 
+     geom_col(show.legend = F) + coord_flip() + scale_x_reordered() +
+     facet_wrap(~account_category, ncol = 2, scales = "free") +
+     ggtitle("Top Words in Each Account Category") # + theme(legend.position = "none") +
+     
+```
+Looking at the top words for Commercial, I see the words mainly have to do with some weight loss program, and also "stocks" are in the top 10.
+
+Note - used drlib/R/reorder_within.R for the reorder_within and scale_x_reordered functions   
+   
+   
 ```{r}
 tweets %>% group_by(account_category, tweet_id) %>% 
   count(account_category, sort =T)  %>% group_by(account_category) %>%

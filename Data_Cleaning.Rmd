@@ -377,7 +377,7 @@ tidying_tweets <- function(file){
 This basically goes through a file, tokenizes the tweets and then converts the emojis from UTF-8 encoding to ASCII encoding to the emoji descriptions. Then, since this is the text function, it retrieves all the words connected to emojis and throws away the emojis (I couldn't figure out how to properly left join the words_w_emoji and the emoji so thats why I have two seperate datasets). Lastly, I have to re-tokenize because some of the word_w_emoji that got joined had two or more words.
 
 
-##CSV 10
+##CSV 10 Text
 ```{r}
 library(tokenizers)
 library(devtools)
@@ -439,7 +439,71 @@ tidy_data <- tbl_data %>% mutate(content = str_remove_all(content, "http[:graph:
   raw_text10 <- emoji_test_final
   
 ```
+
+
+##CSV10 Emojis
+```{r}
+library(tokenizers)
+library(devtools)
+devtools::install_github("ropensci/tokenizers")
+ 
+file10 <- "Raw Data/IRAhandle_tweets_10.csv"
+data <- read.csv(file10, encoding = "UTF-8")
+tbl_data <- as_tibble(data)
+
+tidy_data <- tbl_data %>% mutate(content = str_remove_all(content, "http[:graph:]+"),
+                                 content = as.character(content)) %>% 
+  unnest_tokens(word, content, token = "words",strip_punct = F) %>%  anti_join(stop_words) %>%
+  filter(str_detect(word, "[^[:punct:]]|<")) %>%
+  select(-tco1_step1, -tco2_step1, -tco3_step1, -article_url, -post_type) %>%
+  mutate(external_author_id = as.character(external_author_id), 
+         alt_external_id = as.character(alt_external_id),
+         author = as.character(author),
+         region = as.character(region),
+         language = as.character(language),
+         account_type = as.character(account_type),
+         account_category = as.character(account_category),
+         publish_date = mdy_hm(publish_date),
+         harvested_date = mdy_hm(harvested_date))
+
+  ascii <-  tidy_data %>% select(word) %>% 
+            mutate(emoji = iconv(word, from = "UTF-8", to = "ascii", sub = "byte"),
+                   emoji_replace = emoji) 
+  
+  ascii_df <- data.frame(ascii)
+  library(readr)
+  emoji_dictionary <- read_csv("https://raw.githubusercontent.com/lyons7/emojidictionary/master/emoji_dictionary.csv")
+  
+  emoji_descs <- FindReplace(data = ascii_df, Var = "emoji_replace", 
+                      replaceData = emoji_dictionary,
+                      from = "R_Encoding", to = "Name", 
+                      exact = FALSE)
+  
+  emoji_descs <- as_tibble(emoji_descs)
+  emoji_descs <- emoji_descs %>% filter(emoji != emoji_replace) %>%
+                    mutate(emoji_replace = 
+                             str_remove_all(emoji_replace, "<[:alnum:][:alnum:]>")) %>%
+                    select(-emoji)
+  
+  
+  emoji_tester_EMOJI <- emoji_descs %>% 
+                mutate(emoji_replace = str_remove_all(emoji_replace, "http[a-z 0-9]+"),
+                       emoji = str_extract_all(emoji_replace, "[:upper:]+"),
+                       word_w_emoji = str_extract_all(emoji_replace, "[:lower:]+")) %>%
+                unnest(emoji, .preserve = word_w_emoji) %>% select(-word_w_emoji)
+  
+  emojis <- tidy_data %>% 
+               left_join(emoji_tester_EMOJI %>% select(word, emoji)) %>%
+               filter(!is.na(emoji))
+  
+ 
+  raw_emojis10 <- emojis
+  
+```
+
 For some reason, the 10th csv file wouldn't work with this function, particularly with unnest_tokens(token="tweets"). I had to tokenize it by word and adjust accordingly.
+ 
+ 
  
  
 ##Final Datasets 
@@ -451,10 +515,19 @@ tweets <- bind_rows(raw_text, raw_text10)
 write.csv(tweets, "tidy_tweets2.csv")
 
 raw_emojis <- map(files, emojis_finder)
-emojis <- bind_rows(raw_emojis)
+
+for (i in 1:12){
+  raw_emojis[[i]] <- raw_emojis[[i]] %>% mutate(alt_external_id = as.character(alt_external_id))
+}
+emojis <- bind_rows(raw_emojis, raw_emojis10)
 write.csv(emojis, "tidy_emojis.csv")
 
 
+tweets <- tweets %>% mutate(token = word)
+emojis <- emojis %>% mutate(token = emoji)
+tweets_te <- bind_rows(tweets, emojis)
+tweets_te <- tweets_te %>% select(-word_w_emoji)
+write.csv(tweets_te, "tweets_te.csv")
 ```
 
 

@@ -11,6 +11,7 @@ library(lubridate)
 library(stringr)
 library(purrr)
 library(curl)
+library(topicmodels)
 ```
 
 #For Desktop
@@ -39,6 +40,7 @@ write.csv(tweets_te_subset, "tweets_te_subset.csv")
 
 ```{r}
 tweets_subset <- read.csv("tweets_te_subset.csv")
+tweets_subset <-as_tibble(tweets_subset)
 ```
 
 
@@ -78,7 +80,8 @@ tweets %>% group_by(emoji_bin) %>%
            mutate(token = reorder(token, n)) %>%
            ggplot(aes(token,n, emoji_bin)) + geom_col() + coord_flip() +
            facet_wrap(~emoji_bin, scales = "free") +
-           ggtitle("Top Words and Emojis in All Tweets") + scale_y_continuous(labels = comma)
+           ggtitle("Top Words and Emojis in All Tweets") + scale_y_continuous(labels = comma) +
+           theme(axis.text.x = element_text(angle = 30, hjust = .5))
 ```
 
 
@@ -118,8 +121,9 @@ tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed",
      ungroup() %>%
      ggplot(aes(reorder_within(token, n, account_category),n, fill = account_category)) + 
      geom_col(show.legend = F) + coord_flip() + scale_x_reordered() +
-     facet_wrap(~account_category, ncol = 2, scales = "free") + labs(x = "token")
-     ggtitle("Top Words and Emojis in Each Account Category")
+     facet_wrap(~account_category, ncol = 2, scales = "free") + labs(x = "token") +
+     ggtitle("Top Words and Emojis in Each Account Category") +
+     theme(axis.text.x = element_text(angle = 30, hjust = .5))
 ```
 
 ```{r}
@@ -129,7 +133,7 @@ tweets %>% filter(!account_category %in% c("RightTroll", "LeftTroll", "NewsFeed"
      ungroup() %>%
      ggplot(aes(reorder_within(token, n, account_category),n, fill = account_category)) + 
      geom_col(show.legend = F) + coord_flip() + scale_x_reordered() +
-     facet_wrap(~account_category, ncol = 2, scales = "free") + labs(x = "token")
+     facet_wrap(~account_category, ncol = 2, scales = "free") + labs(x = "token") +
      ggtitle("Top Words and Emojis in Each Account Category")
 ```
 
@@ -179,7 +183,9 @@ tweets %>% distinct(tweet_id, .keep_all = T) %>%
   ggplot(aes(date, n)) + geom_line() + theme_minimal() +
     geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
     geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, vjust=0,  
-              hjust=-0.1,  colour = "red")
+              hjust=-0.1,  colour = "red") +
+    ggtitle("Volume of Tweets Across 3 Years") + labs(x = "", y = "Number of Tweets") + 
+    theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
 ```
 
 
@@ -191,6 +197,83 @@ tweets %>% distinct(tweet_id, .keep_all = T) %>%
   ungroup() %>% 
   ggplot(aes(date, n, colour= account_category)) + geom_line() + theme_minimal() +
     geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
-    geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, 
-              vjust=0,  hjust=-0.1,  colour = "red")
+    geom_text(aes(x=as.Date("2016-11-08"),y = 1900), label = "Election Day", size=3, angle=0, 
+              vjust=0,  hjust=-0.1,  colour = "red") + labs(x = "", y = "Number of Tweets") + 
+    theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
 ```
+
+
+
+tf-idf
+```{r}
+total_words_subset <- tweets %>% 
+         filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+         count(account_category, token) %>% group_by(account_category) %>%
+         summarise(total = sum(n))
+
+tweets_grouptotals <- tweets %>% group_by(account_category) %>%
+  count(token) %>%
+  left_join(total_words_subset) %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer"))
+```
+
+```{r}
+tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+  group_by(account_category) %>%
+  count(token) %>%
+  bind_tf_idf(token, account_category, n) %>%
+  arrange(desc(tf_idf)) %>% top_n(10) %>%
+  ungroup() %>%
+  ggplot(aes(reorder_within(token, tf_idf, account_category), tf_idf, fill = account_category)) +
+  geom_col(show.legend = F) + coord_flip() + facet_wrap(~account_category, ncol = 2, scales = "free") +
+  scale_x_reordered() + theme(axis.text.x = element_text(angle = 30, hjust = .5)) + 
+  labs(x = "") + ggtitle("Tokens Most Important to each Account Category")
+```
+
+
+"The idea of tf-idf is to find the important words for the content of each document by decreasing the weight for commonly used words and increasing the weight for words that are not used very much in a collection or corpus of documents"
+
+
+Topic Modeling
+```{r}
+tweets_count <- tweets %>% group_by(account_category) %>% count(token)
+tweets_dtm <- tweets_count %>% cast_dtm(account_category, token, n)
+
+tweets_lda7 <- LDA(tweets_dtm, k = 7, control = list(seed = 1234))
+tweets_topics7 <- tidy(tweets_lda7, matrix = "beta")
+
+tweets_topics7 %>% group_by(topic) %>% top_n(10, beta) %>% ungroup() %>%
+  ggplot(aes(reorder_within(term, beta, topic), beta, fill = topic)) + geom_col(show.legend = F) +
+  facet_wrap(~topic, scales = "free", ncol = 4) + scale_x_reordered() + coord_flip() +
+  theme(axis.text.x = element_text(angle = 30, hjust = .5)) + labs(x = "")
+```
+
+Topics mapped on to categories:
+1 = NonEnglish/Unknown
+2 = RightTroll 
+3 = HashtagGamer
+4 = LeftTroll
+5 = NonEnglish/Unknown/Fearmonger
+6 = NewsFeed
+7 = Commercial
+
+
+```{r}
+tweets_lda8 <- LDA(tweets_dtm, k = 8, control = list(seed = 1234))
+tweets_topics8 <- tidy(tweets_lda8, matrix = "beta")
+
+tweets_topics8 %>% group_by(topic) %>% top_n(10, beta) %>% ungroup() %>%
+  ggplot(aes(reorder_within(term, beta, topic), beta, fill = topic)) + geom_col(show.legend = F) +
+  facet_wrap(~topic, scales = "free", ncol = 4) + scale_x_reordered() + coord_flip() +
+  theme(axis.text.x = element_text(angle = 30, hjust = .5)) + labs(x = "")
+```
+
+1 = NonEnglish/Unknown 
+2 = Unknown/Fearmonger
+3 = RightTroll
+4 = LeftTroll
+5 = NonEnglish/Unknown/Fearmonger
+6 = NewsFeed
+7 = Commercial
+8 = HashtagGamer
+

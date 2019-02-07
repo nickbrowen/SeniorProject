@@ -178,7 +178,19 @@ tweets %>% distinct(tweet_id, .keep_all = T) %>%
   ungroup() %>% 
   ggplot(aes(date, n)) + geom_line() + theme_minimal() +
     geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
-    geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, vjust=0, hjust=-0.1,  
-              colour = "red")
+    geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, vjust=0,  
+              hjust=-0.1,  colour = "red")
 ```
 
+
+```{r}
+tweets %>% distinct(tweet_id, .keep_all = T) %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%
+  group_by(account_category, date = date(publish_date)) %>% 
+  filter(date >= as.Date("2014-06-01")) %>% count(date) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, n, colour= account_category)) + geom_line() + theme_minimal() +
+    geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
+    geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, 
+              vjust=0,  hjust=-0.1,  colour = "red")
+```

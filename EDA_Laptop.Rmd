@@ -277,3 +277,28 @@ tweets_topics8 %>% group_by(topic) %>% top_n(10, beta) %>% ungroup() %>%
 7 = Commercial
 8 = HashtagGamer
 
+```{r}
+tidy(tweets_lda8, matrix = "gamma") %>% group_by(document) %>% top_n(2) %>% arrange(document, desc(gamma), document)
+```
+
+```{r}
+tidy(tweets_lda8, matrix = "gamma") %>%
+     mutate(category = reorder(document, gamma * topic)) %>%
+     ggplot(aes(factor(topic), gamma)) +
+     geom_boxplot() +
+     facet_wrap(~ document)
+```
+
+
+"which topics are associated with each document. Can we put the chapters back together in the correct books? We can find this by examining the per-document-per-topic probabilities,  
+(gamma)"
+
+Which categry is which topic according to gamma:
+1 = NewsFeed (gamma = 0.9999953) / Fearmonger (gamma = 0.7262434)
+2 = Commercial (gamma = 0.9999948)
+3 = RightTroll (gamma = 0.583144)
+4 = RightTroll (gamma = 0.4416682)
+5 = HashtagGamer (gamma = 0.9999922)
+6 = LeftTroll (gamma = 0.9999963) 
+7 = NonEnglish (gamma = 0.6093237) / Unknown (gamma = 0.4096339)
+8 = NonEnglish (gamma = 0.3906708)

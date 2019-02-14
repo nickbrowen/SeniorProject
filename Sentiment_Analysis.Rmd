@@ -1,0 +1,178 @@
+---
+title: "Sentiment Analysis"
+author: "Nick Browen"
+date: "February 12, 2019"
+output: html_document
+---
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(scales)
+library(tidytext)
+library(lubridate)
+library(stringr)
+library(purrr)
+library(curl)
+library(topicmodels)
+library(lexicon)
+library(wordcloud)
+library(reshape2)
+```
+
+#For Desktop
+```{r}
+tweets <- read.csv("tweets_te.csv")
+tweets <- as_tibble(tweets)
+tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+```
+
+
+```{r}
+tweets_te_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
+write.csv(tweets_te_subset, "tweets_te_subset.csv")
+```
+
+```{r}
+tweets_subset <- read.csv("tweets_te_subset.csv")
+tweets_subset <-as_tibble(tweets_subset)
+tweets_subset <- tweets_subset %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+
+```
+
+
+#For Laptop
+```{r}
+tweets <- read.csv("tweets_te_subset.csv")
+tweets <- as_tibble(tweets)
+tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+
+```
+
+
+##Text Sentiment Analysis
+
+###AFINN
+```{r}
+afinn <- get_sentiments("afinn")
+
+tweets_sentiment <- tweets_subset %>% inner_join(afinn) %>% mutate(afinn_score = score) %>% select(-score)
+```
+AFINN is a text sentiment lexicon that rates the sentiment of a word on a scale from -5 to 5.
+
+```{r}
+tweets_sentiment %>% select(afinn_score) %>% summary()
+```
+The average sentiment across all the tweets is -0.6128. Tweets overall are more negative than positive. 
+
+
+```{r}
+tweets_sentiment %>% group_by(account_category) %>% summarise(mean = mean(afinn_score), median = median(afinn_score), sd = sd(afinn_score)) %>% arrange(mean)
+```
+NonEnglish is the most negative category, but after joining with the sentiment lexicon, "die" is the most common word at 372 which is a negative word in English, but in German means "the". The next most common word is "war" which translates to "was" in German. I don't think the sentiments are accurate for this category.
+
+NewFeed is the next most negative category, which makes sense as news tends to be more negative. Top words in the sentiment lexicon include "killed", "fire", "arrested", etc. Then RightTroll is the most negative category, followed by fearmonger, LeftTroll, and HashtagGamer. Commercial and Unknown are the only categories with positive average sentiments.
+
+#Word Cloud for LeftTroll Sentiment
+```{r}
+tweets_sentiment %>% filter(account_category ==  "LeftTroll") %>% mutate(polarity = ifelse(afinn_score>0, "positive", "negative")) %>% group_by(polarity) %>% count(token, sort = T) %>% ungroup() %>% acast(token~polarity, value.var = "n", fill=0) %>% comparison.cloud(colors = c("gray30", "gray60"), max.words = 100)
+```
+
+#WordCloud for RightTroll Sentiment
+```{r}
+tweets_sentiment %>% filter(account_category ==  "RightTroll") %>% mutate(polarity = ifelse(afinn_score>0, "positive", "negative")) %>% group_by(polarity) %>% count(token, sort = T) %>% ungroup() %>% acast(token~polarity, value.var = "n", fill=0) %>% comparison.cloud(colors = c("gray30", "gray60"), max.words = 100)
+```
+
+
+#sentiment over time
+```{r}
+tweets_sentiment %>% group_by(date = date(publish_date)) %>%
+    summarise(mean_score = mean(afinn_score), n = n()) %>% 
+    summary()
+```
+From the sentiment lexicon, we have an average of 34.63 words per day. To not let days with very low amount of words sway the sentiment on way or another, we will only look at days that have at least 10 words (above the first quartile).
+
+```{r}
+tweets_sentiment %>% group_by(date = date(publish_date)) %>%
+    summarise(mean_score = mean(afinn_score), n = n()) %>% filter(n >10) %>%
+    arrange(mean_score)
+```
+Among days with at least 10 words from the sentiment lexicon, 2016-06-22 has the most negative average at -2.364.
+
+
+
+```{r}
+tweets_sentiment %>% group_by(date = date(publish_date)) %>%
+  filter(date >= as.Date("2015-01-01")) %>%
+  summarise(mean_score = mean(afinn_score), n = n()) %>%
+  filter(n > 10) %>%
+  ungroup() %>%
+  ggplot(aes(date, mean_score)) + geom_line() + geom_hline(yintercept =  0, colour = "red", linetype = 4) +
+    ggtitle("Mean AFINN Sentiment Score for Each Day") + labs(y = "Mean Score", x = "")
+```
+After filtering out days with less than 10 words, 2015 is still much more variable and positive than 2016-2018. There might be some slight seasonal trend as it seems to be slightly more positve, then go back down, then back up. 
+
+```{r}
+tweets_sentiment %>% group_by(date = date(publish_date)) %>%
+    filter(date >= as.Date("2015-01-01")) %>%
+    summarise(mean_score = mean(afinn_score), n = n(), s = sd(afinn_score))  %>% mutate(z = (mean_score - 0)/s) %>% ggplot(aes(date, z)) + geom_line() + geom_hline(yintercept =  0, colour = "red", linetype = 4) + 
+  labs(title = "Z-score for Mean AFINN Sentiment Score for Each Day",subtitle = "Assuming Overall Mean Sentiment as 0 or Nuetrals", y = "Z-score", x = "")
+```
+
+
+```{r}
+tweets_sentiment  %>% 
+    filter(account_category %in% c("RightTroll", "LeftTroll")) %>% group_by(account_category, date = date(publish_date)) %>%
+    filter(date >= as.Date("2015-01-01")) %>%
+    summarise(mean_score = mean(afinn_score), n = n()) %>%
+    ungroup() %>%
+    ggplot(aes(date, mean_score, colour = account_category)) + geom_line(size =.9) + geom_hline(yintercept =  0, colour = "red", linetype = 4) +
+    ggtitle("Mean AFINN Sentiment Score for Each Day for RightTroll and LeftTroll") + labs(y = "Mean Score", x = "")
+```
+
+
+
+
+
+##Emoji Sentiment Analysis
+
+```{r}
+tweets %>% filter(emoji_bin == "Emoji") %>% mutate(name = tolower(token))%>% inner_join(emojis_sentiment) %>% select(name, sentiment, positive, neutral, negative, account_category) %>% group_by(account_category) %>% summarise(mean = mean(sentiment)) %>% arrange(mean)
+```
+
+
+
+

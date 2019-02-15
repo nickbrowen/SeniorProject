@@ -89,7 +89,7 @@ tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id
 ```{r}
 afinn <- get_sentiments("afinn")
 
-tweets_sentiment <- tweets_subset %>% inner_join(afinn) %>% mutate(afinn_score = score) %>% select(-score)
+tweets_sentiment <- tweets %>% inner_join(afinn) %>% mutate(afinn_score = score) %>% select(-score)
 ```
 AFINN is a text sentiment lexicon that rates the sentiment of a word on a scale from -5 to 5.
 
@@ -149,9 +149,9 @@ After filtering out days with less than 10 words, 2015 is still much more variab
 tweets_sentiment %>% group_by(date = date(publish_date)) %>%
     filter(date >= as.Date("2015-01-01")) %>%
     summarise(mean_score = mean(afinn_score), n = n(), s = sd(afinn_score))  %>% mutate(z = (mean_score - 0)/s) %>% ggplot(aes(date, z)) + geom_line() + geom_hline(yintercept =  0, colour = "red", linetype = 4) + 
-  labs(title = "Z-score for Mean AFINN Sentiment Score for Each Day",subtitle = "Assuming Overall Mean Sentiment as 0 or Nuetrals", y = "Z-score", x = "")
+  labs(title = "Z-score for Mean AFINN Sentiment Score for Each Day",subtitle = "Assuming Overall Mean Sentiment as 0 (Neutral)'", y = "Z-score", x = "")
 ```
-
+The year 2015 is still much more variable than the other years. The years 2016-2018 are more negative, with semi-frequent large negative spikes. 
 
 ```{r}
 tweets_sentiment  %>% 
@@ -162,8 +162,11 @@ tweets_sentiment  %>%
     ggplot(aes(date, mean_score, colour = account_category)) + geom_line(size =.9) + geom_hline(yintercept =  0, colour = "red", linetype = 4) +
     ggtitle("Mean AFINN Sentiment Score for Each Day for RightTroll and LeftTroll") + labs(y = "Mean Score", x = "")
 ```
+The LeftTroll account category is more positve than the RightTroll, but also more variable.
 
-
+```{r}
+tweets_sentiment %>% filter(account_category %in% c("LeftTroll", "RightTroll"), publish_date > as.Date("2014-01-01")) %>% group_by(account_category, year = year(publish_date)) %>% select(afinn_score) %>% summarise(mean = mean(afinn_score), sd = sd(afinn_score)) %>% ungroup() %>% ggplot(aes(year, mean, color=account_category)) + geom_line() + labs(title = "Average Sentiment by Year for Left and Right Trolls", y = "Year Mean Sentiment", x = "")
+```
 
 
 

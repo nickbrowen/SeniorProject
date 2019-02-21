@@ -34,7 +34,7 @@ scale_x_reordered <- function(..., sep = "___") {
 ```
 
 
-#For Desktop
+####For Desktop
 ```{r}
 tweets <- read.csv("tweets_te.csv")
 tweets <- as_tibble(tweets)
@@ -52,7 +52,7 @@ tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id
                              emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
 ```
 
-
+#####don't run everytime
 ```{r}
 tweets_te_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
 write.csv(tweets_te_subset, "tweets_te_subset.csv")
@@ -77,7 +77,7 @@ tweets_subset <- tweets_subset %>% mutate(external_author_id = as.character(exte
 ```
 
 
-#For Laptop
+####For Laptop
 ```{r}
 tweets <- read.csv("tweets_te_subset.csv")
 tweets <- as_tibble(tweets)
@@ -120,9 +120,31 @@ NonEnglish is the most negative category, but after joining with the sentiment l
 
 NewFeed is the next most negative category, which makes sense as news tends to be more negative. Top words in the sentiment lexicon include "killed", "fire", "arrested", etc. Then RightTroll is the most negative category, followed by fearmonger, LeftTroll, and HashtagGamer. Commercial and Unknown are the only categories with positive average sentiments.
 
+
 ```{r}
+aov(data = tweets_sentiment %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")), afinn_score ~ account_category) %>% summary()
+
 aov(data = tweets_sentiment %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")), afinn_score ~ account_category) %>% TukeyHSD()
 ```
+I'm not sure how useful/appropiate these tests are, but the overall F-test shows that at least one of the account category's mean sentiment score is differnt from the other. The Tukey pairwise comparisons show us that each pair is statistically significantly different than each other.
+
+
+```{r}
+tweets_sentiment %>%
+  mutate(retweet = case_when(retweet == 0 ~ "Original", retweet == 1 ~ "Retweet")) %>%
+  group_by(retweet) %>% 
+  summarise(mean=mean(afinn_score)) %>% 
+  spread(key = retweet, value =mean) %>% 
+  mutate(diff = Original - Retweet)
+
+tweets_sentiment %>%
+  mutate(retweet = case_when(retweet == 0 ~ "Original", retweet == 1 ~ "Retweet")) %>%
+  group_by(account_category, retweet) %>% 
+  summarise(mean=mean(afinn_score)) %>% 
+  spread(key = retweet, value =mean) %>% 
+  mutate(diff = Original - Retweet)
+```
+The trolls self-produced (original) tweets tend to be more negative than the tweets they are retweeting. The only categories this is not true for is HashtagGamer, NewsFeed, and Unknown.
 
 
 #Word Cloud for LeftTroll Sentiment
@@ -146,7 +168,8 @@ From the sentiment lexicon, we have an average of 34.63 words per day. To not le
 
 ```{r}
 tweets_sentiment %>% group_by(date = date(publish_date)) %>%
-    summarise(mean_score = mean(afinn_score), n = n()) %>% filter(n >10) %>%
+    summarise(mean_score = mean(afinn_score), n = n()) %>% 
+    filter(n >10) %>%
     arrange(mean_score)
 ```
 Among days with at least 10 words from the sentiment lexicon, 2016-06-22 has the most negative average at -2.364.
@@ -173,6 +196,7 @@ tweets_sentiment %>% group_by(date = date(publish_date)) %>%
 ```
 The year 2015 is still much more variable than the other years. The years 2016-2018 are more negative, with semi-frequent large negative spikes. 
 
+
 ```{r}
 tweets_sentiment  %>% 
     filter(account_category %in% c("RightTroll", "LeftTroll")) %>% group_by(account_category, date = date(publish_date)) %>%
@@ -184,12 +208,16 @@ tweets_sentiment  %>%
 ```
 The LeftTroll account category is more positve than the RightTroll, but also more variable.
 
+
 ```{r}
 tweets_sentiment %>% filter(account_category %in% c("LeftTroll", "RightTroll"), publish_date > as.Date("2014-01-01")) %>% group_by(account_category, year = year(publish_date)) %>% select(afinn_score) %>% summarise(mean = mean(afinn_score), sd = sd(afinn_score)) %>% ungroup() %>% ggplot(aes(year, mean, color=account_category)) + geom_line() + labs(title = "Average Sentiment by Year for Left and Right Trolls", y = "Year Mean Sentiment", x = "")
 ```
+I'm not sure what to take from this graph. By year, RightTroll started more positive and peaked at its most negative in 2017 and then got more positive. LeftTrolls are almost the mirror opposite.
 
 
 ###NRC
+The NRC lexicon groups words (non-exclusively) into 10 sentiment groups. 
+
 ```{r}
 tweets %>% inner_join(get_sentiments("nrc")) %>%
   filter(account_category %in% c("LeftTroll", "RightTroll")) %>% 
@@ -205,6 +233,7 @@ tweets %>% inner_join(get_sentiments("nrc")) %>%
            title = "Difference between Proportions of NRC Sentiment Categories", 
            subtitle = "LeftTroll minus RightTroll")
 ```
+The biggest differences between categories are for positve, joy, surprise, and negative. The LeftTroll had a higher proportion of postive words (0.0316) and joyous words (0.0214). The RightTroll had a higher proportion of surprising words (-0.0197) and negative words (-0.0188). Interestingly, none of these categories have a larger difference than 0.0316, which is somewhat small and not very different.
 
 
 ##Emoji Sentiment Analysis
@@ -212,7 +241,7 @@ tweets %>% inner_join(get_sentiments("nrc")) %>%
 ```{r}
 tweets %>% filter(emoji_bin == "Emoji") %>% mutate(name = tolower(token))%>% inner_join(emojis_sentiment) %>% select(name, sentiment, positive, neutral, negative, account_category) %>% group_by(account_category) %>% summarise(mean = mean(sentiment)) %>% arrange(mean)
 ```
-
+The RightTroll had the highest postive average sentiment score for their emojis. CommercialTroll had the lowest average postive score. However all categories' average scores are within 0.0475958 points of each other. 
 
 
 

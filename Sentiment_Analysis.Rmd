@@ -20,6 +20,20 @@ library(wordcloud)
 library(reshape2)
 ```
 
+```{r}
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+```
+
+
 #For Desktop
 ```{r}
 tweets <- read.csv("tweets_te.csv")
@@ -106,6 +120,11 @@ NonEnglish is the most negative category, but after joining with the sentiment l
 
 NewFeed is the next most negative category, which makes sense as news tends to be more negative. Top words in the sentiment lexicon include "killed", "fire", "arrested", etc. Then RightTroll is the most negative category, followed by fearmonger, LeftTroll, and HashtagGamer. Commercial and Unknown are the only categories with positive average sentiments.
 
+```{r}
+aov(data = tweets_sentiment %>% filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")), afinn_score ~ account_category) %>% TukeyHSD()
+```
+
+
 #Word Cloud for LeftTroll Sentiment
 ```{r}
 tweets_sentiment %>% filter(account_category ==  "LeftTroll") %>% mutate(polarity = ifelse(afinn_score>0, "positive", "negative")) %>% group_by(polarity) %>% count(token, sort = T) %>% ungroup() %>% acast(token~polarity, value.var = "n", fill=0) %>% comparison.cloud(colors = c("gray30", "gray60"), max.words = 100)
@@ -141,7 +160,8 @@ tweets_sentiment %>% group_by(date = date(publish_date)) %>%
   filter(n > 10) %>%
   ungroup() %>%
   ggplot(aes(date, mean_score)) + geom_line() + geom_hline(yintercept =  0, colour = "red", linetype = 4) +
-    ggtitle("Mean AFINN Sentiment Score for Each Day") + labs(y = "Mean Score", x = "")
+   labs(title = "Mean AFINN Sentiment Score for Each Day", subtitle = "Including Days with at least 10 Words from the Sentiment Lexicon",
+        y = "Mean Score", x = "")
 ```
 After filtering out days with less than 10 words, 2015 is still much more variable and positive than 2016-2018. There might be some slight seasonal trend as it seems to be slightly more positve, then go back down, then back up. 
 
@@ -168,6 +188,23 @@ The LeftTroll account category is more positve than the RightTroll, but also mor
 tweets_sentiment %>% filter(account_category %in% c("LeftTroll", "RightTroll"), publish_date > as.Date("2014-01-01")) %>% group_by(account_category, year = year(publish_date)) %>% select(afinn_score) %>% summarise(mean = mean(afinn_score), sd = sd(afinn_score)) %>% ungroup() %>% ggplot(aes(year, mean, color=account_category)) + geom_line() + labs(title = "Average Sentiment by Year for Left and Right Trolls", y = "Year Mean Sentiment", x = "")
 ```
 
+
+###NRC
+```{r}
+tweets %>% inner_join(get_sentiments("nrc")) %>%
+  filter(account_category %in% c("LeftTroll", "RightTroll")) %>% 
+  group_by(account_category) %>% 
+  count(sentiment) %>% arrange(sentiment) %>%
+  mutate(sum = sum(n), proportion = n/sum) %>% 
+  select(account_category, proportion, sentiment)%>% 
+  spread(key = account_category, value = proportion) %>% 
+  mutate(diff = LeftTroll - RightTroll) %>% 
+  arrange(desc(abs(diff))) %>% 
+  ggplot(aes( reorder(sentiment, diff), diff)) + geom_col() + scale_x_reordered() + 
+      labs(y = "Difference", x = "Sentiment", 
+           title = "Difference between Proportions of NRC Sentiment Categories", 
+           subtitle = "LeftTroll minus RightTroll")
+```
 
 
 ##Emoji Sentiment Analysis

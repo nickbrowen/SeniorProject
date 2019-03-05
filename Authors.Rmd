@@ -1,0 +1,207 @@
+---
+title: "Authors"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(scales)
+library(tidytext)
+library(lubridate)
+library(stringr)
+library(purrr)
+library(curl)
+library(topicmodels)
+library(lexicon)
+library(wordcloud)
+library(reshape2)
+```
+
+```{r}
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+```
+
+
+####For Desktop
+```
+tweets <- read.csv("tweets_te.csv")
+tweets <- as_tibble(tweets)
+tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+```
+
+#####don't run everytime
+```
+tweets_te_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
+write.csv(tweets_te_subset, "tweets_te_subset.csv")
+```
+
+```{r}
+tweets_subset <- read.csv("tweets_te_subset.csv")
+tweets_subset <-as_tibble(tweets_subset)
+tweets_subset <- tweets_subset %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+
+```
+
+
+####For Laptop
+```{r}
+tweets <- read.csv("tweets_te_subset.csv")
+tweets <- as_tibble(tweets)
+tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
+                             author = as.character(author),
+                             word = as.character(word),
+                             token = as.character(token),
+                             emoji = as.character(emoji),
+                             region = as.character(region),
+                             language = as.character(language),
+                             account_type = as.character(account_type),
+                             account_category = as.character(account_category),
+                             publish_date = ymd_hms(publish_date),
+                             harvested_date = ymd_hms(harvested_date),
+                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+
+```
+
+
+##Account Classification: Trump/Clinton Dominant
+
+```{r}
+tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% spread(key = token, value = proportion, fill = 0) %>% select(author, clinton, trump) %>% mutate(dominant = case_when(trump > clinton ~ "trump", trump <= clinton ~ "clinton"))
+```
+shows them twice
+
+```{r}
+proportion_tc <- tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% select(author,token, proportion) %>%  group_by(author)%>% summarise(proportion = max(proportion))
+
+proportion_authors <- tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% select(author,token, proportion)
+
+author_dom <- proportion_tc %>% 
+  left_join(proportion_authors) %>% 
+  mutate(dominant = token, dominant_prop = proportion) %>% 
+  select(author, dominant, dominant_prop) %>% 
+  mutate(dominant = case_when(!author %in% .$author[duplicated(.$author)] ~ .$dominant, (author %in% .$author[duplicated(.$author)]) ~ "tie")) %>%
+  distinct()
+
+tweets <- tweets %>% left_join(author_dom)
+```
+There are some ties, so the length of author_dom is larger than the length of unique authors
+
+
+```{r}
+tweets %>% filter(is.na(dominant)) %>% 
+  distinct(author, .keep_all = T) %>%
+  count(account_category, sort = T)
+```
+These are amount of authors for each account category that never tweeted about Trump of Clinton.
+
+
+```{r}
+tweets %>% filter(!is.na(dominant)) %>% 
+  distinct(author, .keep_all = T) %>% 
+  count(dominant,account_category, sort = F) %>% 
+  arrange(dominant, desc(n))
+```
+
+
+
+##Update Activity (each unit a tweet)
+```{r}
+tweets %>% select(updates, account_category) %>% 
+  distinct(tweet_id, .keep_all = T) %>% 
+  group_by(account_category) %>% 
+  summarise(mean = mean(updates), sd = sd(updates)) %>% 
+  arrange(desc(mean))
+```
+
+```{r}
+tweets %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%   distinct(tweet_id, .keep_all = T) %>% 
+  ggplot(aes(updates, fill =account_category)) + geom_histogram() +   
+    facet_wrap(~account_category) + labs(title = "Amount User Interaction with a Tweet by 
+                                         Account Category")
+```
+
+
+```{r}
+tweets %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>% 
+  distinct(tweet_id, .keep_all = T) %>% 
+  ggplot(aes(updates, fill =dominant)) + geom_histogram() + facet_wrap(~dominant) + 
+  labs(title = "Amount User Interaction with a Tweet by Dominant Classification")
+```
+
+```{r}
+tweets %>% distinct(tweet_id, .keep_all = T) %>% ggplot(aes(x= followers, y = updates)) + geom_point() + geom_smooth(method = "loess", se = F)
+```
+
+
+
+```{r}
+tweets  %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>% 
+  distinct(tweet_id, .keep_all = T) %>%
+  ggplot() + geom_point(aes(x = followers, y = updates, color = account_category)) + 
+  labs(title = "Updates vs. Followers for Tweets by Account Category")
+```
+
+
+```{r}
+tweets %>% distinct(tweet_id, .keep_all = T) %>%
+  mutate(domprop_scale = case_when(
+                            dominant == "clinton" ~ dominant_prop*-1, 
+                            dominant == "tie" ~ 0, 
+                            is.na(dominant) ~ 0, 
+                            dominant == "trump" ~ dominant_prop)) %>%
+  ggplot() + geom_point(aes(y = updates, x = domprop_scale)) +
+    labs(title = "Scale of Trump or Clinton for Dominant vs. Updates - by Tweet")
+  
+```
+
+
+```{r}
+afinn <- get_sentiments("afinn")
+
+tweets_sentiment <- tweets %>% inner_join(afinn) %>% mutate(afinn_score = score) %>% select(-score)
+```
+
+```{r}
+tweets_sentiment %>% 
+  group_by(tweet_id) %>% 
+  summarise(meantweet_sent = mean(afinn_score), tweet_words = n()) %>% 
+  left_join(tweets_sentiment %>% distinct(tweet_id, .keep_all = T)) %>% 
+  ggplot(aes(y = updates, x = meantweet_sent, color = dominant)) + geom_point() + 
+    geom_smooth(method = "lm", se = F) + 
+    labs(title = "Updates vs. Mean Tweet Sentiment by Account Dominant Classification")
+```
+

@@ -32,21 +32,21 @@ scale_x_reordered <- function(..., sep = "___") {
 
 
 ####For Desktop
-```
+```{r}
 tweets <- read.csv("tweets_te.csv")
 tweets <- as_tibble(tweets)
 tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
-                             author = as.character(author),
-                             word = as.character(word),
-                             token = as.character(token),
-                             emoji = as.character(emoji),
-                             region = as.character(region),
-                             language = as.character(language),
-                             account_type = as.character(account_type),
-                             account_category = as.character(account_category),
-                             publish_date = ymd_hms(publish_date),
-                             harvested_date = ymd_hms(harvested_date),
-                             emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
+                            author = as.character(author),
+                            word = as.character(word),
+                            token = as.character(token),
+                            emoji = as.character(emoji),
+                            region = as.character(region),
+                            language = as.character(language),
+                            account_type = as.character(account_type),
+                            account_category = as.character(account_category),
+                            publish_date = ymd_hms(publish_date),
+                            harvested_date = ymd_hms(harvested_date),
+                            emoji_bin = ifelse(is.na(emoji),"Word", "Emoji"))
 ```
 
 #####don't run everytime
@@ -75,7 +75,7 @@ tweets_subset <- tweets_subset %>% mutate(external_author_id = as.character(exte
 
 
 ####For Laptop
-```{r}
+```
 tweets <- read.csv("tweets_te_subset.csv")
 tweets <- as_tibble(tweets)
 tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
@@ -95,16 +95,37 @@ tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id
 
 
 ##Account Classification: Trump/Clinton Dominant
-
 ```{r}
-tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% spread(key = token, value = proportion, fill = 0) %>% select(author, clinton, trump) %>% mutate(dominant = case_when(trump > clinton ~ "trump", trump <= clinton ~ "clinton"))
+tweets  %>%   
+    mutate(token = case_when(token == "donald"|token == "trump" ~ "trump", 
+                             token == "hillary"|token == "hilary"|token == "clinton" ~ "clinton")) %>% 
+    filter(token %in% c("trump", "clinton")) %>%
+    ggplot(aes(account_category, fill = token)) + geom_bar() +
+      labs(title = "Mentions of Trump or Clinton by Account Category")
 ```
-shows them twice
+Already, we can see that Trump is tweeted about much more the Clinton.
+
 
 ```{r}
-proportion_tc <- tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% select(author,token, proportion) %>%  group_by(author)%>% summarise(proportion = max(proportion))
+proportion_tc <- tweets %>% filter(emoji_bin == "Word") %>% 
+  group_by(author) %>%
+  count(token, sort = F) %>% 
+  mutate(total = sum(n), proportion = n/total) %>% 
+  filter(token %in% c("trump", "clinton", "donald", "hillary", "hilary")) %>% 
+  mutate(token = case_when(token == "donald"|token == "trump" ~ "trump", 
+                           token == "hillary"|token == "hilary"|token == "clinton" ~ "clinton")) %>% 
+  select(author,token, proportion) %>% 
+  group_by(author)%>% 
+  summarise(proportion = max(proportion))
 
-proportion_authors <- tweets %>% group_by(author) %>% count(token, sort = F) %>% mutate(total = sum(n), proportion = n/total) %>% filter(token %in% c("trump", "clinton"))  %>% select(author,token, proportion)
+proportion_authors <- tweets %>% filter(emoji_bin == "Word") %>% 
+  group_by(author) %>% 
+  count(token, sort = F) %>% 
+  mutate(total = sum(n), proportion = n/total) %>% 
+  filter(token %in% c("trump", "clinton", "donald", "hillary", "hilary")) %>%
+  mutate(token = case_when(token == "donald"|token == "trump" ~ "trump", 
+                           token == "hillary"|token == "hilary"|token == "clinton" ~ "clinton")) %>%
+  select(author,token, proportion)
 
 author_dom <- proportion_tc %>% 
   left_join(proportion_authors) %>% 
@@ -115,39 +136,93 @@ author_dom <- proportion_tc %>%
 
 tweets <- tweets %>% left_join(author_dom)
 ```
-There are some ties, so the length of author_dom is larger than the length of unique authors
+There are some ties, so the length of author_dom is larger than the length of unique authors.
+
+Method: To assign an author (account) a classification of Trump or Clinton, I looked at the proportion of words that the account tweeted was Trump and proportion of words that were Clinton. (I considered "Donald", "Trump" to be Trump and "Hillary", "Hilary", "Clinton" to be Clinton). If that account has a whole had a higher proportion of using the word "trump", then it was classified as a Trump dominant category. Many accounts never tweeted about clinton or trump, so they are classified as NA. (Note: another method to do this would have been to do this tweet by tweet. So look if in each tweet "trump" was used more times than "clinton" and then classify that tweet as a trump or clinton tweet. Then see if that account has more trump or clinton tweets and classify that way,)
 
 
 ```{r}
-tweets %>% filter(is.na(dominant)) %>% 
-  distinct(author, .keep_all = T) %>%
-  count(account_category, sort = T)
+tweets %>% 
+  distinct(author, .keep_all = T) %>% 
+  group_by(account_category) %>% 
+  summarise(no_tc = sum(is.na(dominant)), n = n(), proportion_notc = no_tc/n) %>% 
+  arrange(desc(proportion_notc))
 ```
 These are amount of authors for each account category that never tweeted about Trump of Clinton.
+The Unknown category, closely followed by the NonEnglish category, has the highest proportion of authors that never tweeted about Trump or Clinton. Interestingly, 63.9% of LeftTroll accounts never tweet about Trump or Clinton, much higher than the RightTrolls. (Also I just realized that the Commercial category only has 5 authors, but they produced 102999 tweets, 17.63% of all tweets)
+
+
+```{r paged.print=FALSE}
+num_authors <- tweets %>% distinct(author, .keep_all = T) %>% group_by(account_category) %>% summarise(n_authors = n())
+
+tweets %>% distinct(author, .keep_all = T) %>%
+  group_by(dominant, account_category) %>% 
+  summarise(n=n()) %>% 
+  arrange(dominant, desc(n)) %>% 
+  left_join(num_authors, by = "account_category") %>% 
+  mutate(prop_accountcat = n/n_authors) %>% 
+  top_n(3) %>% arrange(dominant,desc(prop_accountcat))
+
+tweets %>% distinct(author, .keep_all = T) %>%
+    group_by(dominant, account_category) %>% 
+    summarise(n=n()) %>% 
+    arrange(dominant, desc(n)) %>% 
+    left_join(num_authors, by = "account_category") %>% 
+    mutate(prop_accountcat = n/n_authors) %>% 
+    arrange(dominant,desc(prop_accountcat)) %>% 
+    ggplot(aes(account_category, prop_accountcat, fill = dominant)) + geom_col() 
+      + coord_flip() + labs(x = "Proportion of Authors Dominance Classification in Each Account Category")
+```
+
+Commercial has the highest proportion of accounts that tweet about Trump more than Clinton. Followed by NewsFeed and then RightTroll, where 48.2% of the accounts tweet more about Trump. Oddly, the Fearmonger account category has the most authors that tweet about Clinton more than Trump.
 
 
 ```{r}
-tweets %>% filter(!is.na(dominant)) %>% 
-  distinct(author, .keep_all = T) %>% 
-  count(dominant,account_category, sort = F) %>% 
-  arrange(dominant, desc(n))
+tweets  %>% distinct(author, .keep_all = T) %>% ggplot(aes(account_category, fill = dominant)) +geom_bar() + labs(title = "Number of Authors in each Account Category filled by Dominant Classification")
+```
+The RightTroll category by raw number of accounts has the most authors that tweet more about Trump than Clinton, but, also in just numbers of accounts, RightTroll has the most authors that tweet about Clinton more than Trump. 
+
+
+```{r}
+tweets  %>% distinct(tweet_id, .keep_all = T) %>% ggplot(aes(account_category, fill = dominant)) +geom_bar() + labs(title = "Number of Tweets by each Account Category", subtitle = "Filled by Account Dominant Classification")
+
+tweets%>% ggplot(aes(account_category, fill = dominant)) +geom_bar() + labs(title = "Number of Words by each Account Category", subtitle = "Filled by Account Dominant Classification")
 ```
 
 
 
 ##Update Activity (each unit a tweet)
-```{r}
-tweets %>% select(updates, account_category) %>% 
-  distinct(tweet_id, .keep_all = T) %>% 
-  group_by(account_category) %>% 
-  summarise(mean = mean(updates), sd = sd(updates)) %>% 
-  arrange(desc(mean))
-```
+
+Updates - "The number of 'update actions' on the account that authored the tweet, including tweets, retweets and likes
+
+The Updates variable included the tweets by the account, so every time that account tweeted their updates increased by one. This resulted in just large updates overtime. And accounts that tweeted alot would have very high update values. I am more curious in the retweets and likes that the tweets and account get. To solve this, on the tweet level, I lagged the update variable and subtracted it from the original.
+(Note: there are some weird cases where the update variable goes back down for some reason and my new update variable is negative. Seems to happen when updates occur in the same exact time, but here are also cases where tha isn't true and the updates value goes down. So I'm not sure.)
 
 ```{r}
-tweets %>% 
-  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%   distinct(tweet_id, .keep_all = T) %>% 
-  ggplot(aes(updates, fill =account_category)) + geom_histogram() +   
+tweet_updates <- tweets %>%  distinct(tweet_id, .keep_all = T) %>% 
+  arrange(author, publish_date)  %>% 
+  group_by(author) %>% 
+  arrange(author, publish_date) %>% 
+  mutate(lag_updates = lag(updates, default = 0))  %>%
+  mutate(new_updates = case_when(lag_updates == 0 ~ as.numeric(0), 
+                                 lag_updates != 0 ~ as.numeric(updates - lag_updates))) %>%
+  ungroup()
+```
+
+
+```{r}
+tweet_updates %>% select(new_updates, account_category, tweet_id) %>% 
+    group_by(account_category) %>% 
+    summarise(mean = mean(new_updates), sd = sd(new_updates)) %>% 
+    arrange(desc(mean))
+```
+
+
+
+```{r}
+tweet_updates %>% 
+  filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>%   
+  ggplot(aes(new_updates, fill = account_category)) + geom_histogram(bins = 60) +   
     facet_wrap(~account_category) + labs(title = "Amount User Interaction with a Tweet by 
                                          Account Category")
 ```
@@ -161,13 +236,13 @@ tweets %>%
   labs(title = "Amount User Interaction with a Tweet by Dominant Classification")
 ```
 
-```{r}
+```
 tweets %>% distinct(tweet_id, .keep_all = T) %>% ggplot(aes(x= followers, y = updates)) + geom_point() + geom_smooth(method = "loess", se = F)
 ```
 
 
 
-```{r}
+```
 tweets  %>% 
   filter(account_category %in% c("RightTroll", "LeftTroll", "NewsFeed", "HashtagGamer")) %>% 
   distinct(tweet_id, .keep_all = T) %>%
@@ -196,6 +271,13 @@ tweets_sentiment <- tweets %>% inner_join(afinn) %>% mutate(afinn_score = score)
 ```
 
 ```{r}
+tweets_sentiment %>% group_by(dominant) %>% 
+  summarise(mean = mean(afinn_score)) %>%
+  arrange(mean)
+```
+
+
+```{r}
 tweets_sentiment %>% 
   group_by(tweet_id) %>% 
   summarise(meantweet_sent = mean(afinn_score), tweet_words = n()) %>% 
@@ -203,5 +285,14 @@ tweets_sentiment %>%
   ggplot(aes(y = updates, x = meantweet_sent, color = dominant)) + geom_point() + 
     geom_smooth(method = "lm", se = F) + 
     labs(title = "Updates vs. Mean Tweet Sentiment by Account Dominant Classification")
+```
+
+
+
+
+```{r}
+update_tester <- tweets_subset %>%  distinct(tweet_id, .keep_all = T) %>% select(publish_date, updates, tweet_id, token, retweet, author) %>%  arrange(author, publish_date) 
+
+tweets %>%  distinct(tweet_id, .keep_all = T) %>% arrange(author, publish_date)  %>% group_by(author) %>% arrange(author, publish_date) %>% mutate(lag_updates = lag(updates, default = 0))  %>% mutate(new_updates = case_when(lag_updates == 0 ~ as.numeric(0), lag_updates != 0 ~ as.numeric(updates - lag_updates))) 
 ```
 

@@ -1,6 +1,10 @@
 ---
 title: "EDA Laptop"
-output: html_notebook
+author: "Nick Browen"
+date: "February 12, 2019"
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
@@ -33,7 +37,7 @@ tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id
 ```
 
 
-```{r}
+```
 tweets_te_subset <- sample_n(tweets, dim(tweets)[1]*0.05)
 write.csv(tweets_te_subset, "tweets_te_subset.csv")
 ```
@@ -45,7 +49,7 @@ tweets_subset <-as_tibble(tweets_subset)
 
 
 #For Laptop
-```{r}
+```
 tweets <- read.csv("tweets_te_subset.csv")
 tweets <- as_tibble(tweets)
 tweets <- tweets %>% mutate(external_author_id = as.character(external_author_id), 
@@ -181,10 +185,40 @@ tweets %>% distinct(tweet_id, .keep_all = T) %>%
   filter(date >= as.Date("2014-06-01")) %>% count(date) %>% 
   ungroup() %>% 
   ggplot(aes(date, n)) + geom_line() + theme_minimal() +
-    geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
+    geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = .5, linetype =4) +
     geom_text(aes(x=as.Date("2016-11-08"),y = 3000), label = "Election Day", size=3, angle=0, vjust=0,  
               hjust=-0.1,  colour = "red") +
-    ggtitle("Volume of Tweets Across 3 Years") + labs(x = "", y = "Number of Tweets") + 
+    geom_vline(xintercept = as.Date("2017-08-12"), colour = "red", size = .5, linetype =4) +
+    geom_text(aes(x=as.Date("2017-08-12"),y = 3000), 
+              label = "Charlottesville \n Unite the Right Rally", size=3, angle=0, 
+              vjust=1,  hjust=0,  colour = "red") +
+    geom_vline(xintercept = as.Date("2016-10-07"), colour = "red", size = .5, linetype =4) +
+    geom_text(aes(x=as.Date("2016-10-07"),y = 3000), 
+              label = "WikiLeak \n Podesta Email", size=3, angle=0, 
+              vjust=1,  hjust=1.2,  colour = "red") +
+    labs(title = "Volume of Tweets Across 3 Years", x = "", y = "Number of Tweets") + 
+    theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
+```
+
+The flurry of activity in July and August of 2015 is the period of time when the Commercial account category was active.
+
+```{r}
+tweets %>% filter(account_category %in% c("RightTroll", "LeftTroll")) %>% distinct(tweet_id, .keep_all = T) %>% 
+  group_by(date = date(publish_date)) %>% 
+  filter(date >= as.Date("2014-06-01")) %>% count(date) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, n)) + geom_line() + theme_minimal() +
+    geom_text(aes(x=as.Date("2016-11-08"),y = 875), label = "Election Day", size=3, angle=0, vjust=0,  
+              hjust=-0.1,  colour = "red") +
+    geom_text(aes(x=as.Date("2017-08-12"),y = 1900), 
+              label = "Charlottesville \n Unite the Right Rally", size=3, angle=0, 
+              vjust=1,  hjust=0,  colour = "red") +
+    geom_text(aes(x=as.Date("2016-10-07"),y = 1100), 
+              label = "WikiLeak \n Podesta Email", size=3, angle=0, 
+              vjust=1,  hjust=1.4,  colour = "red") + 
+    geom_text(aes(x=as.Date("2016-09-17"),y = 1800), label = "Seaside Park \n Bomb", size=3, angle=0, vjust=0,  
+              hjust=-0.1,  colour = "red") +
+    labs(title = "Volume of Left and Right Troll Tweets Across 3 Years", x = "", y = "Number of Tweets") + 
     theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
 ```
 
@@ -195,13 +229,50 @@ tweets %>% distinct(tweet_id, .keep_all = T) %>%
   group_by(account_category, date = date(publish_date)) %>% 
   filter(date >= as.Date("2014-06-01")) %>% count(date) %>% 
   ungroup() %>% 
-  ggplot(aes(date, n, colour= account_category)) + geom_line() + theme_minimal() +
-    geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = 1, linetype =4) +
+  ggplot(aes(date, n, colour= account_category)) + geom_line(size = 0.75) + theme_minimal() +
+    geom_vline(xintercept = as.Date("2016-11-08"), colour = "red", size = .5, linetype =4) +
     geom_text(aes(x=as.Date("2016-11-08"),y = 1900), label = "Election Day", size=3, angle=0, 
               vjust=0,  hjust=-0.1,  colour = "red") + labs(x = "", y = "Number of Tweets") + 
+    geom_vline(xintercept = as.Date("2017-08-12"), colour = "red", size = .5, linetype =4) +
+    geom_text(aes(x=as.Date("2017-08-12"),y = 1900), 
+              label = "Charlottesville \n Unite the Right Rally", size=3, angle=0, 
+              vjust=1,  hjust=0,  colour = "red") +
+    geom_vline(xintercept = as.Date("2016-10-07"), colour = "red", size = .5, linetype =4) +
+    geom_text(aes(x=as.Date("2016-10-07"),y = 1900), 
+              label = "WikiLeak \n Podesta Email", size=3, angle=0, 
+              vjust=1,  hjust=1.2,  colour = "red") +
     theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
 ```
 
+```{r}
+#Top days of tweets for RightTrolls
+ tweets %>% distinct(tweet_id, .keep_all = T) %>% 
+   group_by(date = date(publish_date)) %>% 
+   filter(date >= as.Date("2014-06-01"), account_category=="RightTroll") %>% count(date, sort = T)
+```
+08/08/2017 - 08/18/2017 saw a massive spike in tweets for RighTrolls. Occured around the Chartlottesville Unite the Right Rally.
+
+
+```{r}
+#Top days of tweets for LeftTrolls
+ tweets %>% distinct(tweet_id, .keep_all = T) %>% 
+   group_by(date = date(publish_date)) %>% 
+   filter(date >= as.Date("2014-06-01"), account_category=="LeftTroll") %>% count(date, sort = T)
+```
+The top 2 days for amount of LeftTroll tweets is 10/06/2016 - 10/07/2016, right before the beginning of the WikiLeaks Podesta email release.
+
+
+```{r}
+tweets %>% distinct(tweet_id, .keep_all = T) %>% filter(account_category == "Fearmonger") %>%
+  group_by(date = date(publish_date)) %>% 
+  filter(date >= as.Date("2014-06-01")) %>% count(date) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, n)) + geom_line(size = 1) + theme_minimal() +
+    geom_text(aes(x=as.Date("2016-11-08"),y = 350), label = "Thanksgiving", size=3, angle=0, vjust=0,  
+              hjust=5,  colour = "red") +
+    labs(title = "Volume of Tweets Across 3 Years for Fearmonger Trolls", x = "", y = "Number of Tweets") + 
+    theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)))
+```
 
 
 tf-idf
